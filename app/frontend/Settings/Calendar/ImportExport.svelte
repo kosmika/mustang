@@ -25,7 +25,9 @@
   import HeaderGroupBox from "../../Shared/HeaderGroupBox.svelte";
   import Button from "../../Shared/Button.svelte";
   import { saveBlobAsFile } from "../../Util/util";
+  import { logError } from "../../Util/error";
   import { t } from "../../../l10n/l10n";
+  import { ArrayColl } from "svelte-collections";
 
   export let account: Calendar;
 
@@ -36,12 +38,24 @@
       return;
     }
     let fileContents = await file.text();
-    let events = convertICalToEvents(fileContents, () => account.newEvent());
+    let errors = new ArrayColl<Error>();
+    let events = convertICalToEvents(fileContents, () => account.newEvent(), errors);
     account.events.addAll(events);
     for (let event of events) {
-      await event.save();
+      try {
+        await event.save();
+      } catch (ex) {
+        errors.add(ex);
+      }
     }
     await account.save();
+
+    if (errors.hasItems) {
+      for (let ex of errors) {
+        logError(ex);
+      }
+      throw errors.first;
+    }
   }
 
   async function exportICal() {

@@ -24,7 +24,9 @@
   import HeaderGroupBox from "../../Shared/HeaderGroupBox.svelte";
   import Button from "../../Shared/Button.svelte";
   import { saveBlobAsFile } from "../../Util/util";
+  import { logError } from "../../Util/error";
   import { t } from "../../../l10n/l10n";
+  import { ArrayColl } from "svelte-collections";
 
   export let account: Addressbook;
 
@@ -35,12 +37,24 @@
       return;
     }
     let fileContents = await file.text();
-    let persons = convertVCardsToPersons(fileContents, () => account.newPerson());
+    let errors = new ArrayColl<Error>();
+    let persons = convertVCardsToPersons(fileContents, () => account.newPerson(), errors);
     account.persons.addAll(persons);
     for (let person of persons) {
-      await person.save();
+      try {
+        await person.save();
+      } catch (ex) {
+        errors.add(ex);
+      }
     }
     await account.save();
+
+    if (errors.hasItems) {
+      for (let ex of errors) {
+        logError(ex);
+      }
+      throw errors.first;
+    }
   }
 
   async function exportVCard() {
